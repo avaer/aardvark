@@ -116,14 +116,6 @@ CHTMLSurface::CHTMLSurface(std::function<void(uint32_t width, uint32_t height, c
   /* vr::VROverlayError error = vr::VROverlay()->CreateOverlay("browser", "browser", &overlayHandle);
   getOut() << "overlay create result " << error << std::endl;
   error = vr::VROverlay()->ShowOverlay(overlayHandle); */
-
-  std::thread([]() {
-    for (;;) {
-      // getOut() << "run callbacks" << std::endl;
-      SteamAPI_RunCallbacks();
-      Sleep(10);
-    }
-  }).detach();
 }
 void CHTMLSurface::OnBrowserReady(HTML_BrowserReady_t *pBrowserReady, bool bIOFailure) {
   getOut() << "browser ready 1 " << bIOFailure << std::endl;

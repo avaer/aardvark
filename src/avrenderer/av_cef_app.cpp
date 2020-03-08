@@ -127,6 +127,7 @@ void CAardvarkCefApp::startRenderer() {
   std::thread([this]() {
     renderer->init();
     for(;;) {
+      SteamAPI_RunCallbacks();
       renderer->runFrame();
       if (!renderer->m_quitting) {
         Sleep(10);
