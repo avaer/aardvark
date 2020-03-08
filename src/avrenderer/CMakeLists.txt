@@ -36,15 +36,18 @@ add_executable(avrenderer WIN32
   io.h
 
 	${SHADERS}
-	)
+)
 
 target_link_libraries(avrenderer ${Vulkan_LIBRARY} ${WINLIBS})
 target_link_libraries( avrenderer aardvark )
 target_link_libraries( avrenderer tools )
 target_link_libraries( avrenderer ${OpenVR_LIB_DIR}/openvr_api.lib )
 target_link_libraries( avrenderer DXGI.lib )
+# target_link_libraries( avrenderer ${AV_STEAMWORKS}/public/steam/lib/win64/sdkencryptedappticket64.lib )
+target_link_libraries( avrenderer ${AV_STEAMWORKS}/redistributable_bin/win64/steam_api64.lib )
 
 target_include_directories( avrenderer PUBLIC ${AV_SRC_THIRDPARTY} )
+target_include_directories( avrenderer PUBLIC ${AV_STEAMWORKS}/public/steam )
 target_include_directories( avrenderer PRIVATE ${OpenVR_INCLUDE_DIR} )
 target_link_libraries( avrenderer gltfpbr_base)
 target_compile_definitions(avrenderer PRIVATE 

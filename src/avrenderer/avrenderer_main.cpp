@@ -39,6 +39,9 @@
 
 #include "javascript_renderer.h"
 
+#include "steam_api.h"
+// #include "isteamhtmlsurface.h"
+
 #include "out.h"
 #include "io.h"
 
@@ -79,12 +82,103 @@ void respond(const json &j) {
   }
 }
 
+class CHTMLSurface {
+public:
+  CHTMLSurface();
+
+  // STEAM_CALLBACK( CHTMLSurface, OnBrowserReady, HTML_BrowserReady_t );
+  STEAM_CALLBACK( CHTMLSurface, OnStartRequest, HTML_StartRequest_t ); // REQUIRED
+  STEAM_CALLBACK( CHTMLSurface, OnJSAlert, HTML_JSAlert_t ); // REQUIRED
+  STEAM_CALLBACK( CHTMLSurface, OnJSConfirm, HTML_JSConfirm_t ); // REQUIRED
+  STEAM_CALLBACK( CHTMLSurface, OnUploadLocalFile, HTML_FileOpenDialog_t ); // REQUIRED
+  STEAM_CALLBACK( CHTMLSurface, OnNeedsPaint, HTML_NeedsPaint_t ); // REQUIRED
+  STEAM_CALLBACK( CHTMLSurface, OnNewWindow, HTML_NewWindow_t ); // REQUIRED
+  STEAM_CALLBACK( CHTMLSurface, OnURLChanged, HTML_URLChanged_t ); // REQUIRED
+  STEAM_CALLBACK( CHTMLSurface, OnBrowserRestarted, HTML_BrowserRestarted_t ); // REQUIRED
+
+  void OnBrowserReady( HTML_BrowserReady_t *pBrowserReady, bool bIOFailure );
+  CCallResult< CHTMLSurface, HTML_BrowserReady_t > m_SteamCallResultBrowserReady;
+  SteamAPICall_t browser;
+  vr::VROverlayHandle_t overlayHandle;
+};
+CHTMLSurface::CHTMLSurface() {
+  auto html = SteamHTMLSurface();
+  getOut() << "got html " << (void *)html << std::endl;
+  html->Init();
+  browser = html->CreateBrowser(nullptr, nullptr);
+  m_SteamCallResultBrowserReady.Set(browser, this, &CHTMLSurface::OnBrowserReady);
+  getOut() << "got browser " << browser << std::endl;
+
+  vr::VROverlayError error = vr::VROverlay()->CreateOverlay("browser", "browser", &overlayHandle);
+  getOut() << "overlay create result " << error << std::endl;
+  error = vr::VROverlay()->ShowOverlay(overlayHandle);
+
+  std::thread([]() {
+    for (;;) {
+      // getOut() << "run callbacks" << std::endl;
+      SteamAPI_RunCallbacks();
+      Sleep(10);
+    }
+  }).detach();
+}
+void CHTMLSurface::OnBrowserReady(HTML_BrowserReady_t *pBrowserReady, bool bIOFailure) {
+  getOut() << "browser ready 1 " << bIOFailure << std::endl;
+  
+  browser = pBrowserReady->unBrowserHandle;
+
+  auto html = SteamHTMLSurface();
+  html->SetSize(browser, 1280, 1280);
+  // html->SetDPIScalingFactor(browser, 1.0f);
+  html->LoadURL(browser, "https://google.com/", nullptr);
+  
+  getOut() << "browser ready 2 " << bIOFailure << std::endl;
+}
+void CHTMLSurface::OnStartRequest(HTML_StartRequest_t *pParam) {
+  getOut() << "start request" << std::endl;
+  auto html = SteamHTMLSurface();
+  html->AllowStartRequest(browser, true);
+}
+void CHTMLSurface::OnJSAlert(HTML_JSAlert_t *pParam) {
+  getOut() << "js alert" << std::endl;
+}
+void CHTMLSurface::OnJSConfirm(HTML_JSConfirm_t *pParam) {
+  getOut() << "js confirm" << std::endl;
+}
+void CHTMLSurface::OnUploadLocalFile(HTML_FileOpenDialog_t *pParam) {
+  getOut() << "upload local file" << std::endl;
+}
+void CHTMLSurface::OnNeedsPaint(HTML_NeedsPaint_t *pParam) {
+  getOut() << "needs paint " << pParam->unWide << " " << pParam->unTall << std::endl;
+
+  vr::VROverlay()->SetOverlayRaw(overlayHandle, (void *)pParam->pBGRA, pParam->unWide, pParam->unTall, 3);
+}
+void CHTMLSurface::OnNewWindow(HTML_NewWindow_t *pParam) {
+  getOut() << "new window" << std::endl;
+}
+void CHTMLSurface::OnURLChanged(HTML_URLChanged_t *pParam) {
+  getOut() << "url changed " << pParam->pchURL << std::endl;
+}
+void CHTMLSurface::OnBrowserRestarted(HTML_BrowserRestarted_t *pParam) {
+  getOut() << "browser restarted" << std::endl;
+  if (pParam->unOldBrowserHandle == browser) {
+    HTML_BrowserReady_t ready;
+    ready.unBrowserHandle = pParam->unBrowserHandle;
+    OnBrowserReady(&ready, false);
+  }
+}
+std::unique_ptr<CHTMLSurface> htmlSurface;
+
 // OS specific macros for the example main entry points
 // int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int)
 int main(int argc, char **argv) {
   tools::initLogs();
   
   getOut() << "Start" << std::endl;
+  
+  auto steamRestartOk = SteamAPI_RestartAppIfNecessary(k_uAppIdInvalid);
+  getOut() << "steam restart ok " << (void *)steamRestartOk << std::endl;
+  auto steamInitOk = SteamAPI_Init();
+  getOut() << "steam init ok " << (void *)steamInitOk << std::endl;
   
   std::unique_ptr<CAardvarkCefApp> app(new CAardvarkCefApp());
   /* std::thread renderThread([&]() -> void {
@@ -155,6 +249,9 @@ int main(int argc, char **argv) {
   {  
     app->startRenderer();
     Sleep(2000);
+    
+    htmlSurface.reset(new CHTMLSurface());
+    
     {
       std::string name("objectTest1");
       std::vector<char> data = readFile("data/avatar.glb");

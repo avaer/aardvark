@@ -29,6 +29,7 @@ message ( "tpl" $TinyProcessLibrary_LIB_DIR )
 set( AV_SRC_PUBLIC ${CMAKE_SOURCE_DIR}/public )
 set( AV_SRC_THIRDPARTY ${CMAKE_SOURCE_DIR}/thirdparty )
 set( AV_DATA ${CMAKE_SOURCE_DIR}/../data )
+set( AV_STEAMWORKS ${CMAKE_SOURCE_DIR}/steamworks )
 
 #message ( "pub" ${AV_SRC_PUBLIC} )
 #message ( "tp" ${AV_SRC_THIRDPARTY} )
