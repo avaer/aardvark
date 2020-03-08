@@ -2767,6 +2767,12 @@ void VulkanExample::addToRenderList( IModelInstance *modelInstance )
 	m_modelsToRender.push_back( vulkanModelInstance );
 }
 
+void VulkanExample::removeFromRenderList( IModelInstance *modelInstance )
+{
+	CVulkanRendererModelInstance *vulkanModelInstance = dynamic_cast<CVulkanRendererModelInstance *>( modelInstance );
+	m_modelsToRender.push_back( vulkanModelInstance );
+}
+
 std::shared_ptr<vkglTF::Model> model;
 void VulkanExample::runFrame( bool *shouldQuit, double frameTime )
 { 

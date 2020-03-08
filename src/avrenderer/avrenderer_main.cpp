@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <iostream>
 #include <filesystem>
+#include <functional>
 
 // #define CINTERFACE
 // #define D3D11_NO_HELPERS
@@ -84,7 +85,7 @@ void respond(const json &j) {
 
 class CHTMLSurface {
 public:
-  CHTMLSurface();
+  CHTMLSurface(std::function<void(uint32_t width, uint32_t height, const char *data)> onPaint);
 
   // STEAM_CALLBACK( CHTMLSurface, OnBrowserReady, HTML_BrowserReady_t );
   STEAM_CALLBACK( CHTMLSurface, OnStartRequest, HTML_StartRequest_t ); // REQUIRED
@@ -98,10 +99,13 @@ public:
 
   void OnBrowserReady( HTML_BrowserReady_t *pBrowserReady, bool bIOFailure );
   CCallResult< CHTMLSurface, HTML_BrowserReady_t > m_SteamCallResultBrowserReady;
+  std::function<void(uint32_t width, uint32_t height, std::vector<unsigned char> &&data)> onPaint;
   SteamAPICall_t browser;
-  vr::VROverlayHandle_t overlayHandle;
+  // vr::VROverlayHandle_t overlayHandle;
 };
-CHTMLSurface::CHTMLSurface() {
+CHTMLSurface::CHTMLSurface(std::function<void(uint32_t width, uint32_t height, const char *data)> onPaint) :
+  onPaint(onPaint)
+{
   auto html = SteamHTMLSurface();
   getOut() << "got html " << (void *)html << std::endl;
   html->Init();
@@ -109,9 +113,9 @@ CHTMLSurface::CHTMLSurface() {
   m_SteamCallResultBrowserReady.Set(browser, this, &CHTMLSurface::OnBrowserReady);
   getOut() << "got browser " << browser << std::endl;
 
-  vr::VROverlayError error = vr::VROverlay()->CreateOverlay("browser", "browser", &overlayHandle);
+  /* vr::VROverlayError error = vr::VROverlay()->CreateOverlay("browser", "browser", &overlayHandle);
   getOut() << "overlay create result " << error << std::endl;
-  error = vr::VROverlay()->ShowOverlay(overlayHandle);
+  error = vr::VROverlay()->ShowOverlay(overlayHandle); */
 
   std::thread([]() {
     for (;;) {
@@ -150,7 +154,8 @@ void CHTMLSurface::OnUploadLocalFile(HTML_FileOpenDialog_t *pParam) {
 void CHTMLSurface::OnNeedsPaint(HTML_NeedsPaint_t *pParam) {
   getOut() << "needs paint " << pParam->unWide << " " << pParam->unTall << std::endl;
 
-  vr::VROverlay()->SetOverlayRaw(overlayHandle, (void *)pParam->pBGRA, pParam->unWide, pParam->unTall, 3);
+  onPaint(pParam->unWide, pParam->unTall, pParam->pBGRA);
+  // vr::VROverlay()->SetOverlayRaw(overlayHandle, (void *)pParam->pBGRA, pParam->unWide, pParam->unTall, 3);
 }
 void CHTMLSurface::OnNewWindow(HTML_NewWindow_t *pParam) {
   getOut() << "new window" << std::endl;
@@ -249,9 +254,6 @@ int main(int argc, char **argv) {
   {  
     app->startRenderer();
     Sleep(2000);
-    
-    htmlSurface.reset(new CHTMLSurface());
-    
     {
       std::string name("objectTest1");
       std::vector<char> data = readFile("data/avatar.glb");
@@ -264,7 +266,7 @@ int main(int argc, char **argv) {
       app->renderer->m_renderer->setBoneTexture(model.get(), boneTexture);
       app->renderer->m_renderer->addToRenderList(model.release());
     }
-    /* {
+    {
       std::string name("objectTest2");
       std::vector<float> positions{
         -0.1, 0.5, 0,
@@ -296,15 +298,25 @@ int main(int argc, char **argv) {
       };
       auto model = app->renderer->m_renderer->createDefaultModelInstance(name);
       model = app->renderer->m_renderer->setModelGeometry(std::move(model), positions, normals, colors, uvs, indices);
-      std::vector<unsigned char> image = {
+      /* std::vector<unsigned char> image = {
         255,
         0,
         0,
         255,
       };
-      model = app->renderer->m_renderer->setModelTexture(std::move(model), 1, 1, std::move(image));
-      app->renderer->m_renderer->addToRenderList(model.release());
-    } */
+      model = app->renderer->m_renderer->setModelTexture(std::move(model), 1, 1, std::move(image)); */
+      auto modelPtr = model.release();
+      app->renderer->m_renderer->addToRenderList(modelPtr);
+      htmlSurface.reset(new CHTMLSurface([&app, modelPtr](uint32_t width, uint32_t height, const char *data) {
+        app->renderer->m_renderer->removeFromRenderList(modelPtr);
+
+        std::vector<unsigned char> image(width * height * 4);
+        memcpy(image.data(), data, image.size());
+        auto model = app->renderer->m_renderer->setModelTexture(std::unique_ptr(modelPtr), width, height, std::move(image));
+        modelPtr = model.release();
+        app->renderer->m_renderer->addToRenderList(modelPtr);
+      }));
+    }
   }
   getOut() << "part 2" << std::endl;
   size_t ids = 0;
